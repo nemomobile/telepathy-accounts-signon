@@ -1,0 +1,13 @@
+[org.freedesktop.Telepathy.Client]
+Interfaces=org.freedesktop.Telepathy.Client.Handler;org.freedesktop.Telepathy.Client.Observer
+
+[org.freedesktop.Telepathy.Client.Observer]
+DelayApprovers=true
+
+[org.freedesktop.Telepathy.Client.Handler.HandlerChannelFilter 0]
+org.freedesktop.Telepathy.Channel.ChannelType s=org.freedesktop.Telepathy.Channel.Type.ServerAuthentication
+org.freedesktop.Telepathy.Channel.Type.ServerAuthentication.AuthenticationMethod s=org.freedesktop.Telepathy.Channel.Interface.SASLAuthentication
+
+[org.freedesktop.Telepathy.Client.Observer.ObserverChannelFilter 0]
+org.freedesktop.Telepathy.Channel.ChannelType s=org.freedesktop.Telepathy.Channel.Type.ServerAuthentication
+org.freedesktop.Telepathy.Channel.Type.ServerAuthentication.AuthenticationMethod s=org.freedesktop.Telepathy.Channel.Interface.SASLAuthentication

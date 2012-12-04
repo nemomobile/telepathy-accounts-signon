@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.freedesktop.Telepathy.Client.SaslSignonAuth
+Exec=/usr/libexec/telepathy-sasl-client

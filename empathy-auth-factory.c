@@ -648,6 +648,7 @@ empathy_auth_factory_constructed (GObject *obj)
   tp_base_client_set_handler_bypass_approval (client, FALSE);
 
   /* Handle ServerTLSConnection and ServerAuthentication channels */
+#if 0
   tp_base_client_take_handler_filter (client, tp_asv_new (
           /* ChannelType */
           TP_PROP_CHANNEL_CHANNEL_TYPE, G_TYPE_STRING,
@@ -655,6 +656,7 @@ empathy_auth_factory_constructed (GObject *obj)
           /* AuthenticationMethod */
           TP_PROP_CHANNEL_TARGET_HANDLE_TYPE, G_TYPE_UINT,
           TP_HANDLE_TYPE_NONE, NULL));
+#endif
 
   tp_base_client_take_handler_filter (client, tp_asv_new (
           /* ChannelType */
@@ -757,7 +759,7 @@ empathy_auth_factory_new (TpSimpleClientFactory *factory)
 {
   return g_object_new (EMPATHY_TYPE_AUTH_FACTORY,
       "factory", factory,
-      "name", "Empathy.Auth",
+      "name", "SaslSignonAuth",
       NULL);
 }
 
