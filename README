@@ -1,0 +1,26 @@
+This is a telepathy authentication handler using libaccounts and libsignon,
+kindly borrowed from Empathy's ubuntu-online-account support. Along with a
+mission-control plugin (not included) providing a bridge between libaccounts
+and telepathy, this allows proper use of libaccounts and libsignon to control
+telepathy accounts.
+
+The code is deliberately kept mostly similar to the upstream empathy code for
+now, since there's limited effort towards maintaining it separately.
+
+The auth handler will be invoked by telepathy when needed to authenticate a
+connection. That account is looked up with libaccounts, and then its credentials
+are found from libsignon, and used along with various SASL mechanisms to sign
+into the account.
+
+In Empathy, this component also displays a dialog when credentials fail and need
+to be re-entered, and supports updating those credentials in libsignon. That
+functionality does not exist here, and all other GTK usage was removed.
+
+In Empathy, this component is also responsible for verifying TLS certificates,
+and displaying a dialog to the user to interactively bypass failing certificates.
+Without the dialog, that functionality seems redundant to what telepathy CMs provide,
+so it is also clumsily disabled but left largely intact in case it's needed later.
+
+qmake is used for build as a convenience. There is no other Qt dependency at present.
+
+Code is forked off of Empathy git at EMPATHY_3_7_2-10-ga89694c

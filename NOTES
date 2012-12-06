@@ -1,0 +1,6 @@
+Ch.I.CredentialsStorage is disabled, since it's not an official interface
+and would be difficult to compile. From what I know, it's only useful if we
+wish to be able to store credentials provided to telepathy and unrelated to
+any libaccounts account in libsignon, which isn't relevant for the use case
+here.
+
