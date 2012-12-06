@@ -1,4 +1,8 @@
 /*
+ * Copyright (C) 2012 Jolla Ltd.
+ * Contact: John Brooks <john.brooks@jollamobile.com>
+ *
+ * Based on Empathy,
  * Copyright (C) 2010 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or
@@ -29,23 +33,6 @@
 #include <empathy-auth-factory.h>
 #include <empathy-server-sasl-handler.h>
 #include <empathy-server-tls-handler.h>
-#if 0
-#include <empathy-tls-verifier.h>
-#define DEBUG_FLAG EMPATHY_DEBUG_TLS
-#include <libempathy/empathy-debug.h>
-#include <libempathy/empathy-utils.h>
-
-#include <libempathy-gtk/empathy-bad-password-dialog.h>
-#include <libempathy-gtk/empathy-password-dialog.h>
-#include <libempathy-gtk/empathy-tls-dialog.h>
-#include <libempathy-gtk/empathy-ui-utils.h>
-
-#include "empathy-sanity-cleaning.h"
-
-#include <gnutls/gnutls.h>
-
-#include <extensions/extensions.h>
-#endif
 
 #define TIMEOUT 60
 
@@ -303,9 +290,9 @@ main (int argc,
       return EXIT_FAILURE;
     }
 
-  DEBUG ("Empathy auth client started.");
+  DEBUG ("SASL signon auth client started.");
 
-  if (g_getenv ("EMPATHY_PERSIST") != NULL)
+  if (g_getenv ("SASL_SIGNON_PERSIST") != NULL)
     {
       DEBUG ("Timed-exit disabled");
 

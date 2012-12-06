@@ -30,9 +30,6 @@
 #include <libsignon-glib/signon-identity.h>
 #include "empathy-uoa-utils.h"
 
-#define EMPATHY_UOA_SERVICE_TYPE "IM"
-#define EMPATHY_UOA_PROVIDER "im.telepathy.Account.Storage.UOA"
-
 static AgAccountService *
 uoa_password_common (TpAccount *tp_account,
     GSimpleAsyncResult *result,

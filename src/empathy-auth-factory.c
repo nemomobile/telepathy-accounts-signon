@@ -22,13 +22,11 @@
 #include "empathy-debug.h"
 #include "empathy-utils.h"
 
-//#include "empathy-keyring.h"
-//#include "empathy-sasl-mechanisms.h"
+#include "empathy-keyring.h"
+#include "empathy-sasl-mechanisms.h"
 #include "empathy-server-sasl-handler.h"
 #include "empathy-server-tls-handler.h"
-//#include "empathy-utils.h"
 
-// XXX
 #ifdef HAVE_UOA
 #include "empathy-uoa-auth-handler.h"
 #endif /* HAVE_UOA */
@@ -648,6 +646,7 @@ empathy_auth_factory_constructed (GObject *obj)
   tp_base_client_set_handler_bypass_approval (client, FALSE);
 
   /* Handle ServerTLSConnection and ServerAuthentication channels */
+  /* TLS channels are disabled for now due to redundant functionality. */
 #if 0
   tp_base_client_take_handler_filter (client, tp_asv_new (
           /* ChannelType */
