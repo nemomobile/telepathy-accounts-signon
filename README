@@ -1,8 +1,7 @@
-This is a telepathy authentication handler using libaccounts and libsignon,
-kindly borrowed from Empathy's ubuntu-online-account support. Along with a
-mission-control plugin (not included) providing a bridge between libaccounts
-and telepathy, this allows proper use of libaccounts and libsignon to control
-telepathy accounts.
+A mission control plugin and authentication handler for Telepathy, integrating
+with libaccounts and libsignon to provide IM accounts and authentication.
+This code is kindly borrowed from Empathy's ubuntu-online-account support,
+but not intended to keep compatibility with UOA.
 
 The code is deliberately kept mostly similar to the upstream empathy code for
 now, since there's limited effort towards maintaining it separately.
