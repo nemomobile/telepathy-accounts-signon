@@ -82,6 +82,27 @@ typedef struct {
   AgAccountId account_id;
 } DelayedSignalData;
 
+static gboolean
+_tp_transform_to_string(const GValue *src, GValue *dst)
+{
+  g_value_init(dst, G_TYPE_STRING);
+  gboolean ret = FALSE;
+
+  if (G_VALUE_TYPE(src) == G_TYPE_BOOLEAN)
+    {
+      if (g_value_get_boolean(src))
+          g_value_set_static_string(dst, "true");
+      else
+          g_value_set_static_string(dst, "false");
+      ret = TRUE;
+    }
+  else
+    {
+      ret = g_value_transform(src, dst);
+    }
+
+  return ret;
+}
 
 static gchar *
 _service_dup_tp_value (AgAccountService *service,
@@ -92,10 +113,40 @@ _service_dup_tp_value (AgAccountService *service,
   gchar *ret;
 
   g_value_init (&value, G_TYPE_STRING);
-  ag_account_service_get_value (service, real_key, &value);
-  ret = g_value_dup_string (&value);
-  g_value_unset (&value);
+  AgSettingSource re = ag_account_service_get_value (service, real_key, &value);
+  if (re == AG_SETTING_SOURCE_NONE)
+    {
+      /* Retry as int */
+      g_value_unset (&value);
+      g_value_init (&value, G_TYPE_INT);
+      re = ag_account_service_get_value (service, real_key, &value);
+      
+      if (re == AG_SETTING_SOURCE_NONE)
+        {
+          /* Retry as boolean.. */
+          g_value_unset (&value);
+          g_value_init (&value, G_TYPE_BOOLEAN);
+          re = ag_account_service_get_value (service, real_key, &value);
 
+          if (re == AG_SETTING_SOURCE_NONE)
+            {
+              g_value_unset(&value);
+              g_value_init (&value, G_TYPE_STRING);
+            }
+        }
+    }
+
+  if (G_VALUE_TYPE(&value) != G_TYPE_STRING)
+    {
+      GValue tmp = G_VALUE_INIT;
+      _tp_transform_to_string(&value, &tmp);
+      ret = g_value_dup_string (&tmp);
+      g_value_unset(&tmp);
+    }
+  else
+      ret = g_value_dup_string (&value);
+
+  g_value_unset (&value);
   g_free(real_key);
   return ret;
 }
@@ -488,10 +539,23 @@ account_manager_uoa_get (const McpAccountStorage *storage,
       while (ag_account_service_settings_iter_next (&iter, &k, &v))
         {
           if (!G_VALUE_HOLDS_STRING (v))
-            continue;
+            {
+              GValue strv = G_VALUE_INIT;
+              if (!_tp_transform_to_string(v, &strv))
+                {
+                  g_value_unset(&strv);
+                  continue;
+                }
 
-          mcp_account_manager_set_value (am, account_name,
-              k, g_value_get_string (v));
+              mcp_account_manager_set_value (am, account_name,
+                  k, g_value_get_string (&strv));
+              g_value_unset(&strv);
+            }
+          else
+            {
+              mcp_account_manager_set_value (am, account_name,
+                  k, g_value_get_string (v));
+            }
         }
     }
 
