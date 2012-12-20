@@ -96,6 +96,7 @@ _service_dup_tp_value (AgAccountService *service,
   ret = g_value_dup_string (&value);
   g_value_unset (&value);
 
+  g_free(real_key);
   return ret;
 }
 
