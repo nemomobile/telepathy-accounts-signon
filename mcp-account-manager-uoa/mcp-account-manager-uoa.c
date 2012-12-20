@@ -25,6 +25,9 @@
 #include <libaccounts-glib/ag-account-service.h>
 #include <libaccounts-glib/ag-manager.h>
 #include <libaccounts-glib/ag-service.h>
+#include <libaccounts-glib/ag-auth-data.h>
+
+#include <libsignon-glib/signon-identity.h>
 
 #include <string.h>
 #include <ctype.h>
@@ -201,6 +204,8 @@ _service_enabled_cb (AgAccountService *service,
   DEBUG ("UOA account %s toggled: %s", account_name,
       enabled ? "enabled" : "disabled");
 
+  /* FIXME: Should this update the username from signon credentials first,
+   * in case that was changed? */
   g_signal_emit_by_name (self, "toggled", account_name, enabled);
 
   g_free (account_name);
@@ -217,6 +222,7 @@ _service_changed_cb (AgAccountService *service,
 
   DEBUG ("UOA account %s changed", account_name);
 
+  /* FIXME: Should check signon credentials for changed username */
   /* FIXME: Could use ag_account_service_get_changed_fields()
    * and emit "altered-one" */
   g_signal_emit_by_name (self, "altered", account_name);
@@ -262,6 +268,64 @@ _add_service (McpAccountManagerUoa *self,
   return TRUE;
 }
 
+typedef struct
+{
+    AgAccount *account;
+    AgAccountService *service;
+    McpAccountManagerUoa *self;
+} AccountCreateData;
+
+static void
+_account_created_signon_cb(SignonIdentity *signon,
+    const SignonIdentityInfo *info,
+    const GError *error,
+    gpointer user_data)
+{
+  AccountCreateData *data = (AccountCreateData*) user_data;
+  gchar *username = g_strdup (signon_identity_info_get_username (info));
+  gchar *account_name = NULL;
+
+  gchar *cm_name = _service_dup_tp_value (data->service, "manager");
+  gchar *protocol_name = _service_dup_tp_value (data->service, "protocol");
+
+  if (!tp_str_empty (cm_name) &&
+      !tp_str_empty (protocol_name) &&
+      !tp_str_empty (username))
+    {
+      GHashTable *params;
+
+      params = tp_asv_new (
+          "account", G_TYPE_STRING, username,
+          NULL);
+
+      account_name = mcp_account_manager_get_unique_name (data->self->priv->am,
+          cm_name, protocol_name, params);
+      _service_set_tp_account_name (data->service, account_name);
+
+      /* Must be stored for CMs */
+      _service_set_tp_value (data->service, "param-account", username);
+
+      ag_account_store (data->account, _account_stored_cb, data->self);
+
+      g_hash_table_unref (params);
+    }
+
+  g_free (cm_name);
+  g_free (protocol_name);
+
+  if (account_name != NULL)
+    {
+      if (_add_service (data->self, data->service, account_name))
+        g_signal_emit_by_name (data->self, "created", account_name);
+    }
+
+  g_free (account_name);
+  g_object_unref (data->service);
+  g_object_unref (data->account);
+  g_object_unref (signon);
+  g_free(data);
+}
+
 static void
 _account_created_cb (AgManager *manager,
     AgAccountId id,
@@ -289,43 +353,32 @@ _account_created_cb (AgManager *manager,
       AgAccountService *service = ag_account_service_new (account, l->data);
       gchar *account_name = _service_dup_tp_account_name (service);
 
+      ag_service_unref (l->data);
+      l = g_list_delete_link (l, l);
+
       /* If this is the first time we see this service, we have to generate an
        * account_name for it. */
       if (account_name == NULL)
         {
-          gchar *cm_name = NULL;
-          gchar *protocol_name = NULL;
-          gchar *account_param = NULL;
+          /* Request auth data to get the username from signon; it's not available
+           * from the account. */
+          AgAuthData *auth_data = ag_account_service_get_auth_data (service);
+          guint cred_id = ag_auth_data_get_credentials_id (auth_data);
+          ag_auth_data_unref(auth_data);
 
-          cm_name = _service_dup_tp_value (service, "manager");
-          protocol_name = _service_dup_tp_value (service, "protocol");
-          account_param = _service_dup_tp_value (service, "param-account");
+          SignonIdentity *signon = signon_identity_new_from_db (cred_id);
 
-          if (!tp_str_empty (cm_name) &&
-              !tp_str_empty (protocol_name) &&
-              !tp_str_empty (account_param))
-            {
-              GHashTable *params;
+          /* Callback frees/unrefs data */
+          AccountCreateData *data = g_new(AccountCreateData, 1);
+          data->account = account;
+          data->service = service;
+          data->self = self;
 
-              params = tp_asv_new (
-                  "account", G_TYPE_STRING, account_param,
-                  NULL);
-
-              account_name = mcp_account_manager_get_unique_name (self->priv->am,
-                  cm_name, protocol_name, params);
-              _service_set_tp_account_name (service, account_name);
-
-              ag_account_store (account, _account_stored_cb, self);
-
-              g_hash_table_unref (params);
-            }
-
-          g_free (cm_name);
-          g_free (protocol_name);
-          g_free (account_param);
+          DEBUG("UOA querying account info from signon");
+          signon_identity_query_info(signon, _account_created_signon_cb, data);
+          return;
         }
-
-      if (account_name != NULL)
+      else
         {
           if (_add_service (self, service, account_name))
             g_signal_emit_by_name (self, "created", account_name);
@@ -333,8 +386,6 @@ _account_created_cb (AgManager *manager,
 
       g_free (account_name);
       g_object_unref (service);
-      ag_service_unref (l->data);
-      l = g_list_delete_link (l, l);
     }
 
   g_object_unref (account);
