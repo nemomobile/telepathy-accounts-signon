@@ -268,6 +268,47 @@ _add_service (McpAccountManagerUoa *self,
   return TRUE;
 }
 
+static void
+_account_create(McpAccountManagerUoa *self, AgAccountService *service)
+{
+  gchar *account_name = NULL;
+
+  gchar *cm_name = _service_dup_tp_value (service, "manager");
+  gchar *protocol_name = _service_dup_tp_value (service, "protocol");
+  gchar *username = _service_dup_tp_value (service, "param-account");
+
+  g_debug("UOA _account_create: '%s' '%s' '%s'", cm_name, protocol_name, username);
+
+  if (!tp_str_empty (cm_name) &&
+      !tp_str_empty (protocol_name) &&
+      !tp_str_empty (username))
+    {
+      GHashTable *params;
+
+      params = tp_asv_new (
+          "account", G_TYPE_STRING, username,
+          NULL);
+
+      account_name = mcp_account_manager_get_unique_name (self->priv->am,
+          cm_name, protocol_name, params);
+      _service_set_tp_account_name (service, account_name);
+
+      g_hash_table_unref (params);
+    }
+
+  g_free (cm_name);
+  g_free (protocol_name);
+  g_free (username);
+
+  if (account_name != NULL)
+    {
+      if (_add_service (self, service, account_name))
+        g_signal_emit_by_name (self, "created", account_name);
+    }
+
+  g_free (account_name);
+}
+
 typedef struct
 {
     AgAccount *account;
@@ -283,43 +324,22 @@ _account_created_signon_cb(SignonIdentity *signon,
 {
   AccountCreateData *data = (AccountCreateData*) user_data;
   gchar *username = g_strdup (signon_identity_info_get_username (info));
-  gchar *account_name = NULL;
 
-  gchar *cm_name = _service_dup_tp_value (data->service, "manager");
-  gchar *protocol_name = _service_dup_tp_value (data->service, "protocol");
+  g_debug("UOA got account signon info response");
 
-  if (!tp_str_empty (cm_name) &&
-      !tp_str_empty (protocol_name) &&
-      !tp_str_empty (username))
+  if (!tp_str_empty (username))
     {
-      GHashTable *params;
-
-      params = tp_asv_new (
-          "account", G_TYPE_STRING, username,
-          NULL);
-
-      account_name = mcp_account_manager_get_unique_name (data->self->priv->am,
-          cm_name, protocol_name, params);
-      _service_set_tp_account_name (data->service, account_name);
-
       /* Must be stored for CMs */
       _service_set_tp_value (data->service, "param-account", username);
+      //ag_account_store (data->account, _account_stored_cb, data->self);
 
-      ag_account_store (data->account, _account_stored_cb, data->self);
-
-      g_hash_table_unref (params);
+      _account_create (data->self, data->service);
     }
-
-  g_free (cm_name);
-  g_free (protocol_name);
-
-  if (account_name != NULL)
+  else
     {
-      if (_add_service (data->self, data->service, account_name))
-        g_signal_emit_by_name (data->self, "created", account_name);
+      g_debug("UOA has no account name");
     }
 
-  g_free (account_name);
   g_object_unref (data->service);
   g_object_unref (data->account);
   g_object_unref (signon);
@@ -360,23 +380,32 @@ _account_created_cb (AgManager *manager,
        * account_name for it. */
       if (account_name == NULL)
         {
-          /* Request auth data to get the username from signon; it's not available
-           * from the account. */
-          AgAuthData *auth_data = ag_account_service_get_auth_data (service);
-          guint cred_id = ag_auth_data_get_credentials_id (auth_data);
-          ag_auth_data_unref(auth_data);
+          gchar *username = _service_dup_tp_value(service, "param-account");
+          if (!username)
+            {
+              /* Request auth data to get the username from signon; it's not available
+               * from the account. */
+              AgAuthData *auth_data = ag_account_service_get_auth_data (service);
+              guint cred_id = ag_auth_data_get_credentials_id (auth_data);
+              ag_auth_data_unref(auth_data);
 
-          SignonIdentity *signon = signon_identity_new_from_db (cred_id);
+              SignonIdentity *signon = signon_identity_new_from_db (cred_id);
 
-          /* Callback frees/unrefs data */
-          AccountCreateData *data = g_new(AccountCreateData, 1);
-          data->account = account;
-          data->service = service;
-          data->self = self;
+              /* Callback frees/unrefs data */
+              AccountCreateData *data = g_new(AccountCreateData, 1);
+              data->account = account;
+              data->service = service;
+              data->self = self;
 
-          DEBUG("UOA querying account info from signon");
-          signon_identity_query_info(signon, _account_created_signon_cb, data);
-          return;
+              DEBUG("UOA querying account info from signon");
+              signon_identity_query_info(signon, _account_created_signon_cb, data);
+              return;
+            }
+          else
+            {
+              _account_create (self, service);
+              g_free (username);
+            }
         }
       else
         {
