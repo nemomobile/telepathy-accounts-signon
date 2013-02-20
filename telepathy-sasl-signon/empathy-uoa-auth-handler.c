@@ -272,6 +272,13 @@ identity_query_info_cb (SignonIdentity *identity,
     }
 
   ctx->username = g_strdup (signon_identity_info_get_username (info));
+  if (!ctx->username || !*ctx->username)
+    {
+      g_free(ctx->username);
+      AgAccount *account = ag_account_service_get_account (ctx->service);
+      ctx->username = g_strdup (ag_account_get_display_name (account));
+      DEBUG ("No username in signon data, falling back to account display name (%s) as username", ctx->username);
+    }
 
   signon_auth_session_process (ctx->session,
       ag_auth_data_get_parameters (ctx->auth_data),

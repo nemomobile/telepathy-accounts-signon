@@ -38,9 +38,6 @@ typedef struct
 
 static SupportedMech supported_mechanisms[] = {
   { EMPATHY_SASL_MECHANISM_FACEBOOK, MECH_FACEBOOK },
-  /* XXX: Prefer password authentication over OAUTH for now,
-   * pending infrastructure support for oauth accounts. */
-  { EMPATHY_SASL_MECHANISM_PASSWORD, MECH_PASSWORD },
   { EMPATHY_SASL_MECHANISM_WLM, MECH_WLM },
   { EMPATHY_SASL_MECHANISM_GOOGLE, MECH_GOOGLE },
 
