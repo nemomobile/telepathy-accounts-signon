@@ -26,6 +26,7 @@
 #include <libaccounts-glib/ag-manager.h>
 #include <libaccounts-glib/ag-service.h>
 #include <libaccounts-glib/ag-auth-data.h>
+#include <libaccounts-glib/ag-provider.h>
 
 #include <libsignon-glib/signon-identity.h>
 
@@ -649,8 +650,10 @@ account_manager_uoa_get (const McpAccountStorage *storage,
 
   if (key == NULL || !tp_strdiff (key, "DisplayName"))
     {
+      AgProvider *provider = ag_manager_get_provider (self->priv->manager, ag_account_get_provider_name (account));
       mcp_account_manager_set_value (am, account_name, "DisplayName",
-          ag_account_get_display_name (account));
+          ag_provider_get_display_name (provider));
+      ag_provider_unref(provider);
       handled = TRUE;
     }
 
