@@ -332,7 +332,7 @@ _account_created_signon_cb(SignonIdentity *signon,
     {
       /* Must be stored for CMs */
       _service_set_tp_value (data->service, "param-account", username);
-      //ag_account_store (data->account, _account_stored_cb, data->self);
+      ag_account_store (data->account, _account_stored_cb, data->self);
 
       _account_create (data->self, data->service);
     }
