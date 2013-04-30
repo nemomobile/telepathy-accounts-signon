@@ -294,6 +294,9 @@ _account_create(McpAccountManagerUoa *self, AgAccountService *service)
           cm_name, protocol_name, params);
       _service_set_tp_account_name (service, account_name);
 
+      ag_account_store (ag_account_service_get_account (service),
+              _account_stored_cb, self);
+
       g_hash_table_unref (params);
     }
 
