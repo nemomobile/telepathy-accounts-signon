@@ -30,22 +30,6 @@
 #define MECH_GOOGLE "X-OAUTH2"
 #define MECH_PASSWORD "X-TELEPATHY-PASSWORD"
 
-typedef struct
-{
-  EmpathySaslMechanism id;
-  const gchar *name;
-} SupportedMech;
-
-static SupportedMech supported_mechanisms[] = {
-  { EMPATHY_SASL_MECHANISM_FACEBOOK, MECH_FACEBOOK },
-  { EMPATHY_SASL_MECHANISM_WLM, MECH_WLM },
-  { EMPATHY_SASL_MECHANISM_GOOGLE, MECH_GOOGLE },
-
-  /* Must be the last one, otherwise empathy_sasl_channel_select_mechanism()
-   * will prefer password over web auth for servers supporting both. */
-  { EMPATHY_SASL_MECHANISM_PASSWORD, MECH_PASSWORD }
-};
-
 static void
 generic_cb (TpChannel *proxy,
     const GError *error,
@@ -360,16 +344,26 @@ empathy_sasl_channel_supports_mechanism (TpChannel *channel,
 }
 
 EmpathySaslMechanism
-empathy_sasl_channel_select_mechanism (TpChannel *channel)
+empathy_sasl_channel_select_mechanism (TpChannel *channel,
+    const gchar *credential_type)
 {
   guint i;
 
-  for (i = 0; i < G_N_ELEMENTS (supported_mechanisms); i++)
-    {
-      if (empathy_sasl_channel_supports_mechanism (channel,
-              supported_mechanisms[i].name))
-        return supported_mechanisms[i].id;
-    }
+  if (g_strcmp0 (credential_type, "password") == 0) {
+    if (empathy_sasl_channel_supports_mechanism (channel,
+          MECH_PASSWORD))
+      return EMPATHY_SASL_MECHANISM_PASSWORD;
+  } else if (g_strcmp0 (credential_type, "oauth2") == 0) {
+    if (empathy_sasl_channel_supports_mechanism (channel,
+          MECH_FACEBOOK))
+      return EMPATHY_SASL_MECHANISM_FACEBOOK;
+    else if (empathy_sasl_channel_supports_mechanism (channel,
+          MECH_WLM))
+      return EMPATHY_SASL_MECHANISM_WLM;
+    else if (empathy_sasl_channel_supports_mechanism (channel,
+          MECH_GOOGLE))
+      return EMPATHY_SASL_MECHANISM_GOOGLE;
+  }
 
   return EMPATHY_SASL_MECHANISM_UNSUPPORTED;
 }

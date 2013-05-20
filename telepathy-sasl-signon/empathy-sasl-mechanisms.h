@@ -63,7 +63,8 @@ gboolean empathy_sasl_auth_finish (TpChannel *channel,
 gboolean empathy_sasl_channel_supports_mechanism (TpChannel *channel,
     const gchar *mechanism);
 
-EmpathySaslMechanism empathy_sasl_channel_select_mechanism (TpChannel *channel);
+EmpathySaslMechanism empathy_sasl_channel_select_mechanism (TpChannel *channel,
+    const gchar *credential_type);
 
 G_END_DECLS
 
