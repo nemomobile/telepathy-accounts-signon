@@ -213,6 +213,7 @@ session_process_cb (SignonAuthSession *session,
   AuthContext *ctx = user_data;
   const gchar *access_token;
   const gchar *client_id;
+  const gchar *auth_method;
 
   if (error != NULL)
     {
@@ -224,8 +225,9 @@ session_process_cb (SignonAuthSession *session,
   access_token = tp_asv_get_string (session_data, "AccessToken");
   client_id = tp_asv_get_string (ag_auth_data_get_parameters (ctx->auth_data),
       "ClientId");
+  auth_method = signon_auth_session_get_method (session);
 
-  switch (empathy_sasl_channel_select_mechanism (ctx->channel))
+  switch (empathy_sasl_channel_select_mechanism (ctx->channel, auth_method))
     {
       case EMPATHY_SASL_MECHANISM_FACEBOOK:
         empathy_sasl_auth_facebook_async (ctx->channel,
@@ -393,9 +395,5 @@ empathy_uoa_auth_handler_supports (EmpathyUoaAuthHandler *self,
   if (tp_strdiff (provider, EMPATHY_UOA_PROVIDER))
     return FALSE;
 
-  mech = empathy_sasl_channel_select_mechanism (channel);
-  return mech == EMPATHY_SASL_MECHANISM_FACEBOOK ||
-      mech == EMPATHY_SASL_MECHANISM_WLM ||
-      mech == EMPATHY_SASL_MECHANISM_GOOGLE ||
-      mech == EMPATHY_SASL_MECHANISM_PASSWORD;
+  return TRUE;
 }
