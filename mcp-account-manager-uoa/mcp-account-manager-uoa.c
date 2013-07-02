@@ -390,10 +390,25 @@ _account_created_cb (AgManager *manager,
               /* Request auth data to get the username from signon; it's not available
                * from the account. */
               AgAuthData *auth_data = ag_account_service_get_auth_data (service);
+              if (!auth_data)
+                {
+                  DEBUG("UOA account is missing auth data; ignored");
+                  g_object_unref (service);
+                  g_object_unref (account);
+                  return;
+                }
+
               guint cred_id = ag_auth_data_get_credentials_id (auth_data);
               ag_auth_data_unref(auth_data);
 
               SignonIdentity *signon = signon_identity_new_from_db (cred_id);
+              if (!signon)
+                {
+                  DEBUG("UOA cannot create signon identity from account (cred_id %u); ignored", cred_id);
+                  g_object_unref (service);
+                  g_object_unref (account);
+                  return;
+                }
 
               /* Callback frees/unrefs data */
               AccountCreateData *data = g_new(AccountCreateData, 1);
