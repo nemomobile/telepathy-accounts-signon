@@ -27,6 +27,8 @@
 #include <libsignon-glib/signon-identity.h>
 #include <libsignon-glib/signon-auth-session.h>
 
+#include <sailfishkeyprovider.h>
+
 #define DEBUG_FLAG EMPATHY_DEBUG_SASL
 #include "empathy-debug.h"
 #include "empathy-keyring.h"
@@ -86,6 +88,7 @@ typedef struct
   SignonAuthSession *session;
 
   gchar *username;
+  gchar *client_id;
 } AuthContext;
 
 static AuthContext *
@@ -116,6 +119,9 @@ auth_context_new (TpChannel *channel,
   if (ctx->session == NULL)
     goto out;
 
+  ctx->username = 0;
+  ctx->client_id = 0;
+
 out:
   return ctx;
 }
@@ -129,6 +135,7 @@ auth_context_free (AuthContext *ctx)
   g_clear_object (&ctx->session);
   g_clear_object (&ctx->identity);
   g_free (ctx->username);
+  g_free (ctx->client_id);
 
   g_slice_free (AuthContext, ctx);
 }
@@ -223,15 +230,13 @@ session_process_cb (SignonAuthSession *session,
     }
 
   access_token = tp_asv_get_string (session_data, "AccessToken");
-  client_id = tp_asv_get_string (ag_auth_data_get_parameters (ctx->auth_data),
-      "ClientId");
   auth_method = signon_auth_session_get_method (session);
 
   switch (empathy_sasl_channel_select_mechanism (ctx->channel, auth_method))
     {
       case EMPATHY_SASL_MECHANISM_FACEBOOK:
         empathy_sasl_auth_facebook_async (ctx->channel,
-            client_id, access_token,
+            ctx->client_id, access_token,
             auth_cb, ctx);
         break;
 
@@ -282,8 +287,19 @@ identity_query_info_cb (SignonIdentity *identity,
       DEBUG ("No username in signon data, falling back to account display name (%s) as username", ctx->username);
     }
 
+  GHashTable *params = ag_auth_data_get_parameters (ctx->auth_data);
+  AgService *service = ag_account_service_get_service (ctx->service);
+
+  SailfishKeyProvider_storedKey (ag_service_get_provider (service),
+      ag_service_get_name (service), "client_id", &ctx->client_id);
+
+  if (ctx->client_id)
+    {
+      tp_asv_set_string (params, "ClientId", ctx->client_id);
+    }
+
   signon_auth_session_process (ctx->session,
-      ag_auth_data_get_parameters (ctx->auth_data),
+      params,
       ag_auth_data_get_mechanism (ctx->auth_data),
       session_process_cb,
       ctx);

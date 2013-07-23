@@ -16,6 +16,8 @@ BuildRequires: pkgconfig(libaccounts-glib)
 BuildRequires: pkgconfig(libsoup-2.4)
 BuildRequires: pkgconfig(mission-control-plugins)
 
+BuildRequires: pkgconfig(libsailfishkeyprovider)
+
 %description
 %{summary}.
 
