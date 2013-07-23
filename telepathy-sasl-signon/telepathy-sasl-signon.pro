@@ -3,6 +3,7 @@ CONFIG -= qt
 
 CONFIG += link_pkgconfig
 PKGCONFIG += libsignon-glib telepathy-glib libaccounts-glib libsoup-2.4
+PKGCONFIG += libsailfishkeyprovider
 
 DEFINES += HAVE_UOA \
     EMPATHY_UOA_PROVIDER=\\\"im.telepathy.Account.Storage.UOA\\\"
