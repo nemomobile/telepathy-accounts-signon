@@ -741,6 +741,91 @@ account_manager_uoa_set (const McpAccountStorage *storage,
   return TRUE;
 }
 
+static gchar *
+account_manager_uoa_create (const McpAccountStorage *storage,
+    const McpAccountManager *am,
+    const gchar *cm_name,
+    const gchar *protocol_name,
+    GHashTable *params,
+    GError **error)
+{
+  McpAccountManagerUoa *self = (McpAccountManagerUoa *) storage;
+  gchar *account_name;
+  AgAccount *account;
+  AgAccountService *service;
+  GList *l;
+
+  g_return_val_if_fail (self->priv->manager != NULL, NULL);
+
+  if (!self->priv->ready)
+    {
+      g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
+          "Cannot create account before being ready");
+      return NULL;
+    }
+
+  DEBUG (G_STRFUNC);
+
+  /* Create a new AgAccountService and keep it internally. This won't save it
+   * into persistent storage until account_manager_uoa_commit() is called.
+   * We assume there is only one IM service */
+  account = ag_manager_create_account (self->priv->manager, protocol_name);
+  l = ag_account_list_services_by_type (account, SERVICE_TYPE);
+  if (l == NULL)
+    {
+      g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
+          "Cannot create a %s service for %s provider",
+          SERVICE_TYPE, protocol_name);
+      g_object_unref (account);
+      return NULL;
+    }
+  service = ag_account_service_new (account, l->data);
+  ag_service_list_free (l);
+  g_object_unref (account);
+
+  account_name = mcp_account_manager_get_unique_name (self->priv->am,
+      cm_name, protocol_name, params);
+  _service_set_tp_account_name (service, account_name);
+  g_assert (_add_service (self, service, account_name));
+
+  /* MC will set all params on the account and commit */
+
+  return account_name;
+}
+
+static gboolean
+account_manager_uoa_delete (const McpAccountStorage *storage,
+    const McpAccountManager *am,
+    const gchar *account_name,
+    const gchar *key)
+{
+  McpAccountManagerUoa *self = (McpAccountManagerUoa *) storage;
+  AgAccountService *service;
+  AgAccount *account;
+
+  g_return_val_if_fail (self->priv->manager != NULL, FALSE);
+
+  service = g_hash_table_lookup (self->priv->accounts, account_name);
+  if (service == NULL)
+    return FALSE;
+
+  account = ag_account_service_get_account (service);
+
+  DEBUG ("%s: %s, %s", G_STRFUNC, account_name, key);
+
+  if (key == NULL)
+    {
+      ag_account_delete (account);
+      g_hash_table_remove (self->priv->accounts, account_name);
+    }
+  else
+    {
+      _service_set_tp_value (service, key, NULL);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 account_manager_uoa_commit (const McpAccountStorage *storage,
     const McpAccountManager *am)
@@ -899,6 +984,8 @@ account_storage_iface_init (McpAccountStorageIface *iface)
   IMPLEMENT (get);
   IMPLEMENT (list);
   IMPLEMENT (set);
+  IMPLEMENT (create);
+  IMPLEMENT (delete);
   IMPLEMENT (commit);
   IMPLEMENT (ready);
   IMPLEMENT (get_identifier);
