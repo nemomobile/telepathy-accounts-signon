@@ -741,6 +741,27 @@ account_manager_uoa_set (const McpAccountStorage *storage,
   return TRUE;
 }
 
+static gchar *
+account_manager_uoa_create (const McpAccountStorage *storage,
+    const McpAccountManager *am,
+    const gchar *cm_name,
+    const gchar *protocol_name,
+    GHashTable *params,
+    GError **error)
+{
+  /* We don't want account creation for this plugin. */
+  return NULL;
+}
+
+static gboolean
+account_manager_uoa_delete (const McpAccountStorage *storage,
+    const McpAccountManager *am,
+    const gchar *account_name,
+    const gchar *key)
+{
+  return FALSE;
+}
+
 static gboolean
 account_manager_uoa_commit (const McpAccountStorage *storage,
     const McpAccountManager *am)
@@ -899,6 +920,8 @@ account_storage_iface_init (McpAccountStorageIface *iface)
   IMPLEMENT (get);
   IMPLEMENT (list);
   IMPLEMENT (set);
+  IMPLEMENT (create);
+  IMPLEMENT (delete);
   IMPLEMENT (commit);
   IMPLEMENT (ready);
   IMPLEMENT (get_identifier);
