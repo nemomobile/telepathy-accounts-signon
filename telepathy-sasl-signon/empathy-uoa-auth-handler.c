@@ -171,6 +171,7 @@ request_password (AuthContext *ctx)
 
   DEBUG ("Invalid credentials, request user action");
 
+#if 0
   /* Inform SSO that the access token (or password) didn't work and it should
    * ask user to re-grant access (or retype password). */
   extra_params = tp_asv_new (
@@ -186,6 +187,7 @@ request_password (AuthContext *ctx)
       request_password_session_process_cb, ctx);
 
   g_hash_table_unref (extra_params);
+#endif
 }
 
 static void
@@ -292,11 +294,10 @@ identity_query_info_cb (SignonIdentity *identity,
 
   SailfishKeyProvider_storedKey (ag_service_get_provider (service),
       ag_service_get_name (service), "client_id", &ctx->client_id);
-
   if (ctx->client_id)
-    {
       tp_asv_set_string (params, "ClientId", ctx->client_id);
-    }
+
+  tp_asv_set_int32 (params, SIGNON_SESSION_DATA_UI_POLICY, SIGNON_POLICY_NO_USER_INTERACTION);
 
   signon_auth_session_process (ctx->session,
       params,
