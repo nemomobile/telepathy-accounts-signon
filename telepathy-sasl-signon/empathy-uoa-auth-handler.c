@@ -26,6 +26,7 @@
 
 #include <libsignon-glib/signon-identity.h>
 #include <libsignon-glib/signon-auth-session.h>
+#include <libsignon-glib/signon-errors.h>
 
 #include <sailfishkeyprovider.h>
 
@@ -148,8 +149,7 @@ auth_context_done (AuthContext *ctx)
 }
 
 static void
-request_password_session_process_cb (SignonAuthSession *session,
-    GHashTable *session_data,
+request_password_account_store_cb (AgAccount *account,
     const GError *error,
     gpointer user_data)
 {
@@ -157,37 +157,29 @@ request_password_session_process_cb (SignonAuthSession *session,
 
   if (error != NULL)
     {
-      DEBUG ("Error processing the session to request user's attention: %s",
-          error->message);
+      DEBUG ("Error setting CredentialsNeedUpdate on account: %s",
+             error->message);
     }
 
-  auth_context_done (ctx);
+  ag_account_select_service (account, ag_account_service_get_service (ctx->service));
+  auth_context_done(ctx);
 }
 
 static void
 request_password (AuthContext *ctx)
 {
-  GHashTable *extra_params;
-
   DEBUG ("Invalid credentials, request user action");
 
-#if 0
-  /* Inform SSO that the access token (or password) didn't work and it should
-   * ask user to re-grant access (or retype password). */
-  extra_params = tp_asv_new (
-      SIGNON_SESSION_DATA_UI_POLICY, G_TYPE_INT,
-          SIGNON_POLICY_REQUEST_PASSWORD,
-      NULL);
+  AgAccount *account = ag_account_service_get_account (ctx->service);
 
-  ag_auth_data_insert_parameters (ctx->auth_data, extra_params);
+  GValue value = G_VALUE_INIT;
+  g_value_init (&value, G_TYPE_BOOLEAN);
+  g_value_set_boolean (&value, TRUE);
 
-  signon_auth_session_process (ctx->session,
-      ag_auth_data_get_parameters (ctx->auth_data),
-      ag_auth_data_get_mechanism (ctx->auth_data),
-      request_password_session_process_cb, ctx);
+  ag_account_select_service (account, NULL);
+  ag_account_set_value (account, "CredentialsNeedUpdate", &value);
 
-  g_hash_table_unref (extra_params);
-#endif
+  ag_account_store (account, request_password_account_store_cb, ctx);
 }
 
 static void
@@ -227,7 +219,18 @@ session_process_cb (SignonAuthSession *session,
   if (error != NULL)
     {
       DEBUG ("Error processing the session: %s", error->message);
-      auth_context_done (ctx);
+      if (g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_CREDENTIALS_NOT_AVAILABLE) ||
+          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_INVALID_CREDENTIALS) ||
+          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_MISSING_DATA) ||
+          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_USER_INTERACTION) ||
+          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_OPERATION_FAILED))
+        {
+          request_password(ctx);
+        } 
+      else
+        {
+          auth_context_done (ctx);
+        }
       return;
     }
 
