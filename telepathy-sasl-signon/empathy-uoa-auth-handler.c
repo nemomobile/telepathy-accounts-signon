@@ -286,10 +286,21 @@ identity_query_info_cb (SignonIdentity *identity,
   ctx->username = g_strdup (signon_identity_info_get_username (info));
   if (!ctx->username || !*ctx->username)
     {
-      g_free(ctx->username);
+      GVariant *v;
       AgAccount *account = ag_account_service_get_account (ctx->service);
-      ctx->username = g_strdup (ag_account_get_display_name (account));
-      DEBUG ("No username in signon data, falling back to account display name (%s) as username", ctx->username);
+      AgService *old_service = ag_account_get_selected_service (account);
+      ag_account_select_service (account, NULL);
+
+      g_free (ctx->username);
+      v = ag_account_get_variant (account, "default_credentials_username", NULL);
+      if (v)
+        ctx->username = g_variant_dup_string (v, NULL);
+      else
+        ctx->username = NULL;
+
+      ag_account_select_service (account, old_service);
+
+      DEBUG ("No username in signon data, falling back to default_credentials_username '%s'", ctx->username);
     }
 
   GHashTable *params = ag_auth_data_get_parameters (ctx->auth_data);
