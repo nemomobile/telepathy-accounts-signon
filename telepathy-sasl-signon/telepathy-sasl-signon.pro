@@ -2,7 +2,7 @@ TEMPLATE = app
 CONFIG -= qt
 
 CONFIG += link_pkgconfig
-PKGCONFIG += libsignon-glib telepathy-glib libaccounts-glib libsoup-2.4
+PKGCONFIG += libsignon-glib telepathy-glib libaccounts-glib
 PKGCONFIG += libsailfishkeyprovider
 
 DEFINES += HAVE_UOA \
