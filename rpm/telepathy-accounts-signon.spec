@@ -13,7 +13,6 @@ BuildRequires: pkgconfig(gobject-2.0)
 BuildRequires: pkgconfig(libsignon-glib)
 BuildRequires: pkgconfig(telepathy-glib)
 BuildRequires: pkgconfig(libaccounts-glib)
-BuildRequires: pkgconfig(libsoup-2.4)
 BuildRequires: pkgconfig(mission-control-plugins)
 
 BuildRequires: pkgconfig(libsailfishkeyprovider)

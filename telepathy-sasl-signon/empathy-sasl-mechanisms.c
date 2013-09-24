@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <libsoup/soup.h>
 #include <string.h>
 
 #include "empathy-debug.h"
@@ -135,38 +134,38 @@ facebook_new_challenge_cb (TpChannel *channel,
 {
   GSimpleAsyncResult *result = user_data;
   FacebookData *data;
-  GHashTable *h;
-  GHashTable *params;
   gchar *response;
   GArray *response_array;
+  gchar **challenge_data;
+  GString *response_string;
+  gchar **d;
 
   DEBUG ("new challenge: %s", challenge->data);
 
   data = g_simple_async_result_get_op_res_gpointer (result);
 
-  h = soup_form_decode (challenge->data);
-
   /* See https://developers.facebook.com/docs/chat/#platauth */
-  params = g_hash_table_new (g_str_hash, g_str_equal);
-  g_hash_table_insert (params, "method", g_hash_table_lookup (h, "method"));
-  g_hash_table_insert (params, "nonce", g_hash_table_lookup (h, "nonce"));
-  g_hash_table_insert (params, "access_token", data->access_token);
-  g_hash_table_insert (params, "api_key", data->client_id);
-  g_hash_table_insert (params, "call_id", "0");
-  g_hash_table_insert (params, "v", "1.0");
+  response_string = g_string_new ("v=1.0&call_id=0");
+  g_string_append_printf (response_string, "&access_token=%s&api_key=%s", data->access_token, data->client_id);
 
-  response = soup_form_encode_hash (params);
-  DEBUG ("Response: %s", response);
+  challenge_data = g_strsplit (challenge->data, "&", 0);
+  for (d = challenge_data; *d; d++) {
+      if (strncmp (*d, "method=", 7) == 0 || strncmp (*d, "nonce=", 6) == 0) {
+          g_string_append_c (response_string, '&');
+          g_string_append (response_string, *d);
+      }
+  }
+
+  DEBUG ("Response: %s", response_string->str);
 
   response_array = g_array_new (FALSE, FALSE, sizeof (gchar));
-  g_array_append_vals (response_array, response, strlen (response));
+  g_array_append_vals (response_array, response_string->str, response_string->len);
 
   tp_cli_channel_interface_sasl_authentication_call_respond (data->channel, -1,
       response_array, generic_cb, g_object_ref (result), g_object_unref, NULL);
 
-  g_hash_table_unref (h);
-  g_hash_table_unref (params);
-  g_free (response);
+  g_string_free (response_string, TRUE);
+  g_strfreev (challenge_data);
   g_array_unref (response_array);
 }
 
