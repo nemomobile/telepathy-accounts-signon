@@ -213,7 +213,6 @@ session_process_cb (SignonAuthSession *session,
 {
   AuthContext *ctx = user_data;
   const gchar *access_token;
-  const gchar *client_id;
   const gchar *auth_method;
 
   if (error != NULL)
@@ -275,6 +274,7 @@ identity_query_info_cb (SignonIdentity *identity,
     gpointer user_data)
 {
   AuthContext *ctx = user_data;
+  gchar *client_secret = 0;
 
   if (error != NULL)
     {
@@ -310,6 +310,12 @@ identity_query_info_cb (SignonIdentity *identity,
       ag_service_get_name (service), "client_id", &ctx->client_id);
   if (ctx->client_id)
       tp_asv_set_string (params, "ClientId", ctx->client_id);
+
+  SailfishKeyProvider_storedKey (ag_service_get_provider (service),
+      ag_service_get_name (service), "client_secret", &client_secret);
+  if (client_secret)
+      tp_asv_set_string (params, "ClientSecret", client_secret);
+  g_free(client_secret);
 
   tp_asv_set_int32 (params, SIGNON_SESSION_DATA_UI_POLICY, SIGNON_POLICY_NO_USER_INTERACTION);
 
