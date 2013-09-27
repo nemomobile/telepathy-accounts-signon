@@ -1,5 +1,7 @@
 /*
  * Copyright © 2012 Collabora Ltd.
+ * Copyright (C) 2013 Jolla Ltd.
+ * Contact: john.brooks@jollamobile.com
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -272,44 +274,49 @@ _add_service (McpAccountManagerUoa *self,
 static void
 _account_create(McpAccountManagerUoa *self, AgAccountService *service)
 {
-  gchar *account_name = NULL;
-
   gchar *cm_name = _service_dup_tp_value (service, "manager");
   gchar *protocol_name = _service_dup_tp_value (service, "protocol");
-  gchar *username = _service_dup_tp_value (service, "param-account");
+  gchar *service_name = 0;
+  gchar *account_name = 0;
+  gchar *tmp;
+  guint account_id = 0;
 
-  g_debug("UOA _account_create: '%s' '%s' '%s'", cm_name, protocol_name, username);
+  g_object_get (ag_account_service_get_account (service), "id", &account_id, NULL);
 
-  if (!tp_str_empty (cm_name) &&
-      !tp_str_empty (protocol_name) &&
-      !tp_str_empty (username))
+  if (tp_str_empty (cm_name) || tp_str_empty (protocol_name))
     {
-      GHashTable *params;
-
-      params = tp_asv_new (
-          "account", G_TYPE_STRING, username,
-          NULL);
-
-      account_name = mcp_account_manager_get_unique_name (self->priv->am,
-          cm_name, protocol_name, params);
-      _service_set_tp_account_name (service, account_name);
-
-      ag_account_store (ag_account_service_get_account (service),
-              _account_stored_cb, self);
-
-      g_hash_table_unref (params);
+      g_debug ("UOA _account_create missing manager/protocol for new account %u, ignoring", account_id);
+      g_free (cm_name);
+      g_free (protocol_name);
+      return;
     }
+
+  /* Generate a unique and predictable name using service name and account ID, instead of
+   * mcp_account_manager_get_unique_name. Manager name and service name are escaped, and
+   * dashes are replaced with underscores in protocol name and service name. This matches
+   * mcp_account_manager_get_unique_name's behavior. */
+  tmp = tp_escape_as_identifier (cm_name);
+  g_free (cm_name);
+  cm_name = tmp;
+
+  g_strdelimit (protocol_name, "-", '_');
+
+  service_name = tp_escape_as_identifier (ag_service_get_name (ag_account_service_get_service (service)));
+  account_name = g_strdup_printf ("%s/%s/%s_%u", cm_name, protocol_name,
+      service_name, account_id);
+
+  _service_set_tp_account_name (service, account_name);
+  ag_account_store (ag_account_service_get_account (service),
+      _account_stored_cb, self);
+
+  g_debug("UOA _account_create: %s", account_name);
+
+  if (_add_service (self, service, account_name))
+      g_signal_emit_by_name (self, "created", account_name);
 
   g_free (cm_name);
   g_free (protocol_name);
-  g_free (username);
-
-  if (account_name != NULL)
-    {
-      if (_add_service (self, service, account_name))
-        g_signal_emit_by_name (self, "created", account_name);
-    }
-
+  g_free (service_name);
   g_free (account_name);
 }
 
