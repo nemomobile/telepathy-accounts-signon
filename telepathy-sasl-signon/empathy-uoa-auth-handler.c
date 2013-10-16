@@ -176,8 +176,13 @@ request_password (AuthContext *ctx)
   g_value_init (&value, G_TYPE_BOOLEAN);
   g_value_set_boolean (&value, TRUE);
 
+  GValue fromValue = G_VALUE_INIT;
+  g_value_init (&fromValue, G_TYPE_STRING);
+  g_value_set_static_string (&fromValue, "telepathy-sasl-signon");
+
   ag_account_select_service (account, NULL);
   ag_account_set_value (account, "CredentialsNeedUpdate", &value);
+  ag_account_set_value (account, "CredentialsNeedUpdateFrom", &fromValue);
 
   ag_account_store (account, request_password_account_store_cb, ctx);
 }
