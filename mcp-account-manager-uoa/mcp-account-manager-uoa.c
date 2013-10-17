@@ -691,8 +691,10 @@ account_manager_uoa_get (const McpAccountStorage *storage,
 
   if (key == NULL || !tp_strdiff (key, "Icon"))
     {
+      AgProvider *provider = ag_manager_get_provider (self->priv->manager, ag_account_get_provider_name (account));
       mcp_account_manager_set_value (am, account_name, "Icon",
-          ag_service_get_icon_name (s));
+          ag_provider_get_icon_name (provider));
+      ag_provider_unref(provider);
       handled = TRUE;
     }
 
