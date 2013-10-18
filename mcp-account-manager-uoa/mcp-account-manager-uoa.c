@@ -675,10 +675,8 @@ account_manager_uoa_get (const McpAccountStorage *storage,
 
   if (key == NULL || !tp_strdiff (key, "DisplayName"))
     {
-      AgProvider *provider = ag_manager_get_provider (self->priv->manager, ag_account_get_provider_name (account));
       mcp_account_manager_set_value (am, account_name, "DisplayName",
-          ag_provider_get_display_name (provider));
-      ag_provider_unref(provider);
+          ag_account_get_display_name (account));
       handled = TRUE;
     }
 
