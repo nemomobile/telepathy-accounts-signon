@@ -7,7 +7,7 @@ License: GPLv2
 URL: https://github.com/nemomobile/telepathy-accounts-signon
 Source0: %{name}-%{version}.tar.bz2
 
-BuildRequires: qt-qmake
+BuildRequires: qt5-qmake
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(gobject-2.0)
 BuildRequires: pkgconfig(libsignon-glib)
@@ -31,7 +31,7 @@ BuildRequires: pkgconfig(libsailfishkeyprovider)
 %setup -q -n %{name}-%{version}
 
 %build
-%qmake
+%qmake5
 make %{?jobs:-j%jobs}
 
 %install
