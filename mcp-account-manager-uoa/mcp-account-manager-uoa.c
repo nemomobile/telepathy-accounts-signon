@@ -52,7 +52,6 @@
 #define KEY_READONLY_PARAMS "mc-readonly-params"
 
 static void account_storage_iface_init (McpAccountStorageIface *iface);
-static void create_account(AgAccountService *service, McpAccountManagerUoa *self);
 
 G_DEFINE_TYPE_WITH_CODE (McpAccountManagerUoa, mcp_account_manager_uoa,
     G_TYPE_OBJECT,
@@ -71,11 +70,6 @@ struct _McpAccountManagerUoaPrivate
    * Note: There could be multiple services in this table having the same
    * AgAccount, even if unlikely. */
   GHashTable *accounts;
-
-  /* List of AgAccountService that are monitored but don't yet have an
-   * associated telepathy account and identifier. A reference must be held
-   * to watch signals. */
-  GList *pending_accounts;
 
   /* Queue of owned DelayedSignalData */
   GQueue *pending_signals;
@@ -206,32 +200,16 @@ _service_enabled_cb (AgAccountService *service,
     McpAccountManagerUoa *self)
 {
   gchar *account_name = _service_dup_tp_account_name (service);
-  GList *node;
 
-  if (account_name == NULL)
-    {
-      if (enabled)
-        {
-          create_account (service, self);
+  if (!self->priv->ready || account_name == NULL)
+    return;
 
-          node = g_list_find (self->priv->pending_accounts, service);
-          if (node)
-            {
-              self->priv->pending_accounts = g_list_delete_link (self->priv->pending_accounts,
-                  node);
-              g_object_unref (service);
-            }
-        }
-    }
-  else
-    {
-      DEBUG ("UOA account %s toggled: %s", account_name,
-          enabled ? "enabled" : "disabled");
+  DEBUG ("UOA account %s toggled: %s", account_name,
+      enabled ? "enabled" : "disabled");
 
-      /* FIXME: Should this update the username from signon credentials first,
-       * in case that was changed? */
-      g_signal_emit_by_name (self, "toggled", account_name, enabled);
-    }
+  /* FIXME: Should this update the username from signon credentials first,
+   * in case that was changed? */
+  g_signal_emit_by_name (self, "toggled", account_name, enabled);
 
   g_free (account_name);
 }
@@ -285,22 +263,29 @@ _add_service (McpAccountManagerUoa *self,
       g_strdup (account_name),
       g_object_ref (service));
 
+  g_signal_connect (service, "enabled",
+      G_CALLBACK (_service_enabled_cb), self);
+  g_signal_connect (service, "changed",
+      G_CALLBACK (_service_changed_cb), self);
+
   return TRUE;
 }
 
 static void
 _account_create(McpAccountManagerUoa *self, AgAccountService *service)
 {
-  AgAccount *account = ag_account_service_get_account (service);
   gchar *cm_name = _service_dup_tp_value (service, "manager");
   gchar *protocol_name = _service_dup_tp_value (service, "protocol");
   gchar *service_name = 0;
   gchar *account_name = 0;
   gchar *tmp;
+  guint account_id = 0;
+
+  g_object_get (ag_account_service_get_account (service), "id", &account_id, NULL);
 
   if (tp_str_empty (cm_name) || tp_str_empty (protocol_name))
     {
-      g_debug ("UOA _account_create missing manager/protocol for new account %u, ignoring", account->id);
+      g_debug ("UOA _account_create missing manager/protocol for new account %u, ignoring", account_id);
       g_free (cm_name);
       g_free (protocol_name);
       return;
@@ -318,10 +303,11 @@ _account_create(McpAccountManagerUoa *self, AgAccountService *service)
 
   service_name = tp_escape_as_identifier (ag_service_get_name (ag_account_service_get_service (service)));
   account_name = g_strdup_printf ("%s/%s/%s_%u", cm_name, protocol_name,
-      service_name, account->id);
+      service_name, account_id);
 
   _service_set_tp_account_name (service, account_name);
-  ag_account_store (account, _account_stored_cb, self);
+  ag_account_store (ag_account_service_get_account (service),
+      _account_stored_cb, self);
 
   g_debug("UOA _account_create: %s", account_name);
 
@@ -366,6 +352,7 @@ _account_created_signon_cb(SignonIdentity *signon,
     }
 
   g_object_unref (data->service);
+  g_object_unref (data->account);
   g_object_unref (signon);
   g_free(data);
 }
@@ -375,102 +362,88 @@ _account_created_cb (AgManager *manager,
     AgAccountId id,
     McpAccountManagerUoa *self)
 {
+  AgAccount *account;
   GList *l;
-  AgAccount *account = ag_manager_get_account (self->priv->manager, id);
 
   if (!self->priv->ready)
     {
       DelayedSignalData *data = g_slice_new0 (DelayedSignalData);
 
       data->signal = DELAYED_CREATE;
-      data->account_id = account->id;
+      data->account_id = id;
 
       g_queue_push_tail (self->priv->pending_signals, data);
       return;
     }
 
+  account = ag_manager_get_account (self->priv->manager, id);
+
   l = ag_account_list_services_by_type (account, SERVICE_TYPE);
   while (l != NULL)
     {
       AgAccountService *service = ag_account_service_new (account, l->data);
-      g_signal_connect (service, "enabled",
-          G_CALLBACK (_service_enabled_cb), self);
-      g_signal_connect (service, "changed",
-          G_CALLBACK (_service_changed_cb), self);
+      gchar *account_name = _service_dup_tp_account_name (service);
 
-      if (ag_account_get_enabled (account))
+      ag_service_unref (l->data);
+      l = g_list_delete_link (l, l);
+
+      /* If this is the first time we see this service, we have to generate an
+       * account_name for it. */
+      if (account_name == NULL)
         {
-          create_account (service, self);
+          gchar *username = _service_dup_tp_value(service, "param-account");
+          if (!username)
+            {
+              /* Request auth data to get the username from signon; it's not available
+               * from the account. */
+              AgAuthData *auth_data = ag_account_service_get_auth_data (service);
+              if (!auth_data)
+                {
+                  DEBUG("UOA account is missing auth data; ignored");
+                  g_object_unref (service);
+                  g_object_unref (account);
+                  return;
+                }
+
+              guint cred_id = ag_auth_data_get_credentials_id (auth_data);
+              ag_auth_data_unref(auth_data);
+
+              SignonIdentity *signon = signon_identity_new_from_db (cred_id);
+              if (!signon)
+                {
+                  DEBUG("UOA cannot create signon identity from account (cred_id %u); ignored", cred_id);
+                  g_object_unref (service);
+                  g_object_unref (account);
+                  return;
+                }
+
+              /* Callback frees/unrefs data */
+              AccountCreateData *data = g_new(AccountCreateData, 1);
+              data->account = account;
+              data->service = service;
+              data->self = self;
+
+              DEBUG("UOA querying account info from signon");
+              signon_identity_query_info(signon, _account_created_signon_cb, data);
+              return;
+            }
+          else
+            {
+              _account_create (self, service);
+              g_free (username);
+            }
         }
       else
         {
-          self->priv->pending_accounts = g_list_prepend (self->priv->pending_accounts,
-              g_object_ref (service));
+          if (_add_service (self, service, account_name))
+            g_signal_emit_by_name (self, "created", account_name);
         }
 
+      g_free (account_name);
       g_object_unref (service);
-      ag_service_unref (l->data);
-      l = g_list_delete_link (l, l);
     }
 
   g_object_unref (account);
-}
-
-static void
-create_account(AgAccountService *service,
-    McpAccountManagerUoa *self)
-{
-  gchar *account_name = _service_dup_tp_account_name (service);
-
-  /* If this is the first time we see this service, we have to generate an
-   * account_name for it. */
-  if (account_name == NULL)
-    {
-      gchar *username = _service_dup_tp_value(service, "param-account");
-      if (!username)
-        {
-          /* Request auth data to get the username from signon; it's not available
-           * from the account. */
-          AgAuthData *auth_data = ag_account_service_get_auth_data (service);
-          if (!auth_data)
-            {
-              DEBUG("UOA account is missing auth data; ignored");
-              return;
-            }
-
-          guint cred_id = ag_auth_data_get_credentials_id (auth_data);
-          ag_auth_data_unref(auth_data);
-
-          SignonIdentity *signon = signon_identity_new_from_db (cred_id);
-          if (!signon)
-            {
-              DEBUG("UOA cannot create signon identity from account (cred_id %u); ignored", cred_id);
-              return;
-            }
-
-          /* Callback frees/unrefs data */
-          AccountCreateData *data = g_new(AccountCreateData, 1);
-          data->account = ag_account_service_get_account (service);
-          data->service = g_object_ref (service);
-          data->self = self;
-
-          DEBUG("UOA querying account info from signon");
-          signon_identity_query_info(signon, _account_created_signon_cb, data);
-          return;
-        }
-      else
-        {
-          _account_create (self, service);
-          g_free (username);
-        }
-    }
-  else
-    {
-      if (_add_service (self, service, account_name))
-        g_signal_emit_by_name (self, "created", account_name);
-    }
-
-  g_free (account_name);
 }
 
 static void
@@ -480,7 +453,6 @@ _account_deleted_cb (AgManager *manager,
 {
   GHashTableIter iter;
   gpointer value;
-  GList *node;
 
   if (!self->priv->ready)
     {
@@ -514,22 +486,6 @@ _account_deleted_cb (AgManager *manager,
 
       g_free (account_name);
     }
-
-  node = self->priv->pending_accounts;
-  while (node)
-    {
-      GList *next = g_list_next (node);
-      AgAccountService *service = node->data;
-      AgAccount *account = ag_account_service_get_account (service);
-
-      if (account->id == id)
-        {
-          g_object_unref (service);
-          self->priv->pending_accounts = g_list_delete_link (self->priv->pending_accounts, node);
-        }
-
-      node = next;
-    }
 }
 
 static void
@@ -541,9 +497,6 @@ mcp_account_manager_uoa_dispose (GObject *object)
   tp_clear_object (&self->priv->manager);
   tp_clear_pointer (&self->priv->accounts, g_hash_table_unref);
   tp_clear_object (&self->priv->monitor);
-
-  g_list_free_full (self->priv->pending_accounts, g_object_unref);
-  self->priv->pending_accounts = NULL;
 
   G_OBJECT_CLASS (mcp_account_manager_uoa_parent_class)->dispose (object);
 }
@@ -558,7 +511,6 @@ mcp_account_manager_uoa_init (McpAccountManagerUoa *self)
 
   self->priv->accounts = g_hash_table_new_full (g_str_hash, g_str_equal,
       g_free, g_object_unref);
-  self->priv->pending_accounts = NULL;
   self->priv->pending_signals = g_queue_new ();
 
   self->priv->manager = ag_manager_new_for_service_type (SERVICE_TYPE);
@@ -607,10 +559,6 @@ _ensure_loaded (McpAccountManagerUoa *self)
         {
           /* This service was already known, we can add it now */
           _add_service (self, service, account_name);
-          g_signal_connect (service, "enabled",
-              G_CALLBACK (_service_enabled_cb), self);
-          g_signal_connect (service, "changed",
-              G_CALLBACK (_service_changed_cb), self);
           g_free (account_name);
         }
       else
