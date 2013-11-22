@@ -14,8 +14,9 @@ BuildRequires: pkgconfig(libsignon-glib)
 BuildRequires: pkgconfig(telepathy-glib)
 BuildRequires: pkgconfig(libaccounts-glib)
 BuildRequires: pkgconfig(mission-control-plugins)
-
 BuildRequires: pkgconfig(libsailfishkeyprovider)
+
+Requires: mapplauncherd
 
 %description
 %{summary}.
