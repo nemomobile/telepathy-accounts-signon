@@ -161,7 +161,6 @@ request_password_account_store_cb (AgAccount *account,
              error->message);
     }
 
-  ag_account_select_service (account, ag_account_service_get_service (ctx->service));
   auth_context_done(ctx);
 }
 
@@ -180,9 +179,11 @@ request_password (AuthContext *ctx)
   g_value_init (&fromValue, G_TYPE_STRING);
   g_value_set_static_string (&fromValue, "telepathy-sasl-signon");
 
-  ag_account_select_service (account, NULL);
   ag_account_set_value (account, "CredentialsNeedUpdate", &value);
   ag_account_set_value (account, "CredentialsNeedUpdateFrom", &fromValue);
+
+  DEBUG ("telepathy-sasl-signon: setting CredentialsNeedUpdate on service %s for account: %d",
+         ag_service_get_name(ag_account_service_get_service (ctx->service)), account->id);
 
   ag_account_store (account, request_password_account_store_cb, ctx);
 }
