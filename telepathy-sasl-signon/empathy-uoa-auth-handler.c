@@ -161,7 +161,6 @@ request_password_account_store_cb (AgAccount *account,
              error->message);
     }
 
-  ag_account_select_service (account, ag_account_service_get_service (ctx->service));
   auth_context_done(ctx);
 }
 
@@ -180,9 +179,11 @@ request_password (AuthContext *ctx)
   g_value_init (&fromValue, G_TYPE_STRING);
   g_value_set_static_string (&fromValue, "telepathy-sasl-signon");
 
-  ag_account_select_service (account, NULL);
   ag_account_set_value (account, "CredentialsNeedUpdate", &value);
   ag_account_set_value (account, "CredentialsNeedUpdateFrom", &fromValue);
+
+  DEBUG ("telepathy-sasl-signon: setting CredentialsNeedUpdate on service %s for account: %d",
+         ag_service_get_name(ag_account_service_get_service (ctx->service)), account->id);
 
   ag_account_store (account, request_password_account_store_cb, ctx);
 }
@@ -223,14 +224,10 @@ session_process_cb (SignonAuthSession *session,
   if (error != NULL)
     {
       DEBUG ("Error processing the session: %s", error->message);
-      if (g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_CREDENTIALS_NOT_AVAILABLE) ||
-          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_INVALID_CREDENTIALS) ||
-          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_MISSING_DATA) ||
-          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_USER_INTERACTION) ||
-          g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_OPERATION_FAILED))
+      if (g_error_matches(error, SIGNON_ERROR, SIGNON_ERROR_USER_INTERACTION))
         {
           request_password(ctx);
-        } 
+        }
       else
         {
           auth_context_done (ctx);
