@@ -727,10 +727,8 @@ account_manager_uoa_get (const McpAccountStorage *storage,
 
   if (key == NULL || !tp_strdiff (key, "DisplayName"))
     {
-      AgProvider *provider = ag_manager_get_provider (self->priv->manager, ag_account_get_provider_name (account));
       mcp_account_manager_set_value (am, account_name, "DisplayName",
-          ag_provider_get_display_name (provider));
-      ag_provider_unref(provider);
+          ag_account_get_display_name (account));
       handled = TRUE;
     }
 
@@ -939,6 +937,33 @@ account_manager_uoa_get_identifier (const McpAccountStorage *storage,
   g_value_set_uint (identifier, account->id);
 }
 
+static GHashTable *
+account_manager_uoa_get_additional_info (const McpAccountStorage *storage,
+    const gchar *account_name)
+{
+  McpAccountManagerUoa *self = (McpAccountManagerUoa *) storage;
+  AgAccountService *service;
+  AgAccount *account;
+  AgProvider *provider;
+  GHashTable *ret = NULL;
+
+  /* If we don't know this account, we cannot do anything */
+  service = g_hash_table_lookup (self->priv->accounts, account_name);
+  if (service == NULL)
+    return ret;
+
+  account = ag_account_service_get_account (service);
+  provider = ag_manager_get_provider (self->priv->manager, ag_account_get_provider_name (account));
+
+  ret = tp_asv_new (
+      "providerDisplayName", G_TYPE_STRING, ag_provider_get_display_name (provider),
+      "accountDisplayName", G_TYPE_STRING, ag_account_get_display_name (account),
+      NULL);
+
+  ag_provider_unref(provider);
+  return ret;
+}
+
 static guint
 account_manager_uoa_get_restrictions (const McpAccountStorage *storage,
     const gchar *account_name)
@@ -987,6 +1012,7 @@ account_storage_iface_init (McpAccountStorageIface *iface)
   IMPLEMENT (ready);
   IMPLEMENT (get_identifier);
   IMPLEMENT (get_restrictions);
+  IMPLEMENT (get_additional_info);
 #undef IMPLEMENT
 }
 
