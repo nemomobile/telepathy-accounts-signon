@@ -200,9 +200,22 @@ auth_cb (GObject *source,
   if (!empathy_sasl_auth_finish (channel, result, &error))
     {
       DEBUG ("SASL Mechanism error: %s", error->message);
-      g_clear_error (&error);
 
-      request_password (ctx);
+      // If the error looks like credential failure, set the CredentialsNeedUpdate flag.
+      // We cannot set the flag for all SASL errors, because this includes things like a
+      // connection reset during authentication.
+      if (strstr(error->message, "WOCKY_AUTH_ERROR_FAILURE") ||
+          strstr(error->message, "WOCKY_AUTH_ERROR_NOT_AUTHORIZED"))
+        {
+          request_password (ctx);
+        }
+      else
+        {
+          DEBUG ("Auth on %s failed", tp_proxy_get_object_path (channel));
+          auth_context_done (ctx);
+        }
+
+      g_clear_error (&error);
     }
   else
     {
