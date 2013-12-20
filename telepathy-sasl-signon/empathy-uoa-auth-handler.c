@@ -341,37 +341,6 @@ identity_query_info_cb (SignonIdentity *identity,
       ctx);
 }
 
-static void
-set_account_password_cb (GObject *source,
-    GAsyncResult *result,
-    gpointer user_data)
-{
-  TpAccount *tp_account = (TpAccount *) source;
-  AuthContext *ctx = user_data;
-  AuthContext *new_ctx;
-  GError *error = NULL;
-
-  if (!empathy_keyring_set_account_password_finish (tp_account, result, &error))
-    {
-      DEBUG ("Failed to set empty password on UOA account: %s", error->message);
-      auth_context_done (ctx);
-      return;
-    }
-
-  new_ctx = auth_context_new (ctx->channel, ctx->service);
-  auth_context_free (ctx);
-
-  if (new_ctx->session != NULL)
-    {
-      /* The trick worked! */
-      request_password (new_ctx);
-      return;
-    }
-
-  DEBUG ("Still can't get a signon session, even after setting empty pwd");
-  auth_context_done (new_ctx);
-}
-
 void
 empathy_uoa_auth_handler_start (EmpathyUoaAuthHandler *self,
     TpChannel *channel,
@@ -414,12 +383,8 @@ empathy_uoa_auth_handler_start (EmpathyUoaAuthHandler *self,
   ctx = auth_context_new (channel, service);
   if (ctx->session == NULL)
     {
-      /* This (usually?) means we never stored credentials for this account.
-       * To ask user to type his password SSO needs a SignonIdentity bound to
-       * our account. Let's store an empty password. */
-      DEBUG ("Couldn't create a signon session");
-      empathy_keyring_set_account_password_async (tp_account, "", FALSE,
-          set_account_password_cb, ctx);
+      DEBUG ("Couldn't create a signon session for AgAccountId %u", id);
+      auth_context_done (ctx);
     }
   else
     {
