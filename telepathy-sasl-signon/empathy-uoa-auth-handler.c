@@ -200,9 +200,22 @@ auth_cb (GObject *source,
   if (!empathy_sasl_auth_finish (channel, result, &error))
     {
       DEBUG ("SASL Mechanism error: %s", error->message);
-      g_clear_error (&error);
 
-      request_password (ctx);
+      // If the error looks like credential failure, set the CredentialsNeedUpdate flag.
+      // We cannot set the flag for all SASL errors, because this includes things like a
+      // connection reset during authentication.
+      if (strstr(error->message, "WOCKY_AUTH_ERROR_FAILURE") ||
+          strstr(error->message, "WOCKY_AUTH_ERROR_NOT_AUTHORIZED"))
+        {
+          request_password (ctx);
+        }
+      else
+        {
+          DEBUG ("Auth on %s failed", tp_proxy_get_object_path (channel));
+          auth_context_done (ctx);
+        }
+
+      g_clear_error (&error);
     }
   else
     {
@@ -328,37 +341,6 @@ identity_query_info_cb (SignonIdentity *identity,
       ctx);
 }
 
-static void
-set_account_password_cb (GObject *source,
-    GAsyncResult *result,
-    gpointer user_data)
-{
-  TpAccount *tp_account = (TpAccount *) source;
-  AuthContext *ctx = user_data;
-  AuthContext *new_ctx;
-  GError *error = NULL;
-
-  if (!empathy_keyring_set_account_password_finish (tp_account, result, &error))
-    {
-      DEBUG ("Failed to set empty password on UOA account: %s", error->message);
-      auth_context_done (ctx);
-      return;
-    }
-
-  new_ctx = auth_context_new (ctx->channel, ctx->service);
-  auth_context_free (ctx);
-
-  if (new_ctx->session != NULL)
-    {
-      /* The trick worked! */
-      request_password (new_ctx);
-      return;
-    }
-
-  DEBUG ("Still can't get a signon session, even after setting empty pwd");
-  auth_context_done (new_ctx);
-}
-
 void
 empathy_uoa_auth_handler_start (EmpathyUoaAuthHandler *self,
     TpChannel *channel,
@@ -401,12 +383,8 @@ empathy_uoa_auth_handler_start (EmpathyUoaAuthHandler *self,
   ctx = auth_context_new (channel, service);
   if (ctx->session == NULL)
     {
-      /* This (usually?) means we never stored credentials for this account.
-       * To ask user to type his password SSO needs a SignonIdentity bound to
-       * our account. Let's store an empty password. */
-      DEBUG ("Couldn't create a signon session");
-      empathy_keyring_set_account_password_async (tp_account, "", FALSE,
-          set_account_password_cb, ctx);
+      DEBUG ("Couldn't create a signon session for AgAccountId %u", id);
+      auth_context_done (ctx);
     }
   else
     {
