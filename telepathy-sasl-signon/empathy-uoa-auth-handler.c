@@ -370,7 +370,8 @@ empathy_uoa_auth_handler_start (EmpathyUoaAuthHandler *self,
   if (l == NULL)
     {
       DEBUG ("Couldn't find IM service for AgAccountId %u", id);
-      g_object_unref (account);
+      if (account != NULL)
+        g_object_unref (account);
       tp_channel_close_async (channel, NULL, NULL);
       return;
     }
