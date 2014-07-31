@@ -324,15 +324,15 @@ identity_query_info_cb (SignonIdentity *identity,
   SailfishKeyProvider_storedKey (ag_service_get_provider (service),
       ag_service_get_name (service), "client_id", &ctx->client_id);
   if (ctx->client_id)
-      tp_asv_set_string (params, "ClientId", ctx->client_id);
+      tp_asv_set_string (params, g_strdup("ClientId"), ctx->client_id);
 
   SailfishKeyProvider_storedKey (ag_service_get_provider (service),
       ag_service_get_name (service), "client_secret", &client_secret);
   if (client_secret)
-      tp_asv_set_string (params, "ClientSecret", client_secret);
+      tp_asv_set_string (params, g_strdup("ClientSecret"), client_secret);
   g_free(client_secret);
 
-  tp_asv_set_int32 (params, SIGNON_SESSION_DATA_UI_POLICY, SIGNON_POLICY_NO_USER_INTERACTION);
+  tp_asv_set_int32 (params, g_strdup(SIGNON_SESSION_DATA_UI_POLICY), SIGNON_POLICY_NO_USER_INTERACTION);
 
   signon_auth_session_process (ctx->session,
       params,
