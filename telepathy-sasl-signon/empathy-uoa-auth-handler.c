@@ -30,6 +30,8 @@
 
 #include <sailfishkeyprovider.h>
 
+#include <string.h>
+
 #define DEBUG_FLAG EMPATHY_DEBUG_SASL
 #include "empathy-debug.h"
 #include "empathy-keyring.h"
@@ -149,16 +151,21 @@ auth_context_done (AuthContext *ctx)
 }
 
 static void
-request_password_account_store_cb (AgAccount *account,
-    const GError *error,
-    gpointer user_data)
+request_password_account_store_cb (GObject *source_object,
+                                   GAsyncResult *res,
+                                   gpointer user_data)
 {
+  AgAccount *account = AG_ACCOUNT(source_object);
   AuthContext *ctx = user_data;
+  GError *error = NULL;
 
-  if (error != NULL)
+  if (!ag_account_store_finish (account, res, &error))
     {
-      DEBUG ("Error setting CredentialsNeedUpdate on account: %s",
+      g_assert (error != NULL);
+      DEBUG ("Error setting CredentialsNeedUpdate on account %u: %s",
+             account->id,
              error->message);
+      g_error_free (error);
     }
 
   auth_context_done(ctx);
@@ -171,21 +178,13 @@ request_password (AuthContext *ctx)
 
   AgAccount *account = ag_account_service_get_account (ctx->service);
 
-  GValue value = G_VALUE_INIT;
-  g_value_init (&value, G_TYPE_BOOLEAN);
-  g_value_set_boolean (&value, TRUE);
+  ag_account_set_variant (account, "CredentialsNeedUpdate", g_variant_new_boolean(TRUE));
+  ag_account_set_variant (account, "CredentialsNeedUpdateFrom", g_variant_new_string("telepathy-sasl-signon"));
 
-  GValue fromValue = G_VALUE_INIT;
-  g_value_init (&fromValue, G_TYPE_STRING);
-  g_value_set_static_string (&fromValue, "telepathy-sasl-signon");
+  g_message ("telepathy-sasl-signon: setting CredentialsNeedUpdate on service %s for account: %u",
+             ag_service_get_name(ag_account_service_get_service (ctx->service)), account->id);
 
-  ag_account_set_value (account, "CredentialsNeedUpdate", &value);
-  ag_account_set_value (account, "CredentialsNeedUpdateFrom", &fromValue);
-
-  DEBUG ("telepathy-sasl-signon: setting CredentialsNeedUpdate on service %s for account: %d",
-         ag_service_get_name(ag_account_service_get_service (ctx->service)), account->id);
-
-  ag_account_store (account, request_password_account_store_cb, ctx);
+  ag_account_store_async (account, 0, request_password_account_store_cb, ctx);
 }
 
 static void
@@ -290,6 +289,7 @@ identity_query_info_cb (SignonIdentity *identity,
 {
   AuthContext *ctx = user_data;
   gchar *client_secret = 0;
+  (void)identity; // suppress unused parameter warning
 
   if (error != NULL)
     {
@@ -318,6 +318,11 @@ identity_query_info_cb (SignonIdentity *identity,
       DEBUG ("No username in signon data, falling back to default_credentials_username '%s'", ctx->username);
     }
 
+  // after upgrade to glib2.4 use:
+  // GVariant *params = ag_auth_data_get_login_parameters (ctx->auth_data, NULL);
+  // g_variant_dict_insert_value (params, g_strdup("ClientId"), g_variant_new_string(ctx->client_id));
+  // g_variant_dict_insert_value (params, g_strdup("ClientSecret"), g_variant_new_string(client_secret));
+  // g_variant_dict_insert_value (params, g_strdup(SIGNON_SESSION_DATA_UI_POLICY), g_variant_new_int32(SIGNON_POLICY_NO_USER_INTERACTION));
   GHashTable *params = ag_auth_data_get_parameters (ctx->auth_data);
   AgService *service = ag_account_service_get_service (ctx->service);
 
@@ -334,7 +339,8 @@ identity_query_info_cb (SignonIdentity *identity,
 
   tp_asv_set_int32 (params, g_strdup(SIGNON_SESSION_DATA_UI_POLICY), SIGNON_POLICY_NO_USER_INTERACTION);
 
-  signon_auth_session_process (ctx->session,
+  signon_auth_session_process (
+      ctx->session,
       params,
       ag_auth_data_get_mechanism (ctx->auth_data),
       session_process_cb,
@@ -403,7 +409,7 @@ empathy_uoa_auth_handler_supports (EmpathyUoaAuthHandler *self,
     TpAccount *account)
 {
   const gchar *provider;
-  EmpathySaslMechanism mech;
+  (void)self; // suppress unused parameter warning
 
   g_return_val_if_fail (TP_IS_CHANNEL (channel), FALSE);
   g_return_val_if_fail (TP_IS_ACCOUNT (account), FALSE);
