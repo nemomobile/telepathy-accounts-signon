@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=org.freedesktop.Telepathy.Client.SaslSignonAuth
-Exec=/usr/bin/invoker --type=generic /usr/libexec/telepathy-sasl-signon
